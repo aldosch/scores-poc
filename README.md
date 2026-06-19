@@ -6,8 +6,8 @@ A minimal [Turborepo](https://turborepo.dev) monorepo managed with [pnpm](https:
 
 | App                | Description                                                        | Dev port |
 | ------------------ | ------------------------------------------------------------------ | -------- |
-| [`apps/web`](apps/web)   | Next.js front-end. Consumes the API served by `back`.          | 3000     |
-| [`apps/back`](apps/back) | Next.js API back-end. Serves API routes for `web` and future apps. | 3001     |
+| [`apps/front`](apps/front) | Next.js front-end. Consumes the API served by `back`.          | 3000     |
+| [`apps/back`](apps/back)   | Next.js API back-end. Serves API routes for `front` and future apps. | 3001     |
 
 Both apps use Next.js 16, React 19, and [Biome](https://biomejs.dev) for lint/format.
 
@@ -15,7 +15,7 @@ Both apps use Next.js 16, React 19, and [Biome](https://biomejs.dev) for lint/fo
 
 ```sh
 pnpm install
-pnpm dev          # run all apps in dev (web:3000, back:3001)
+pnpm dev          # run all apps in dev (front:3000, back:3001)
 ```
 
 ## Scripts
@@ -38,7 +38,7 @@ Target a single app with a filter, e.g. `pnpm dev --filter=back`.
 ```
 scores-poc/
 ├── apps/
-│   ├── web/    # Next.js front-end
+│   ├── front/  # Next.js front-end
 │   └── back/   # Next.js API back-end
 ├── biome.json  # Shared Biome config (apps extend via "extends": "//")
 ├── turbo.json  # Turborepo task pipeline
