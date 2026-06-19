@@ -11,10 +11,10 @@ import { getScoresSafe } from "@/lib/scores";
 export const revalidate = 5;
 
 export default async function ScoresPage() {
-  const scores = await getScoresSafe();
+  const { scores, hasLiveGames } = await getScoresSafe();
 
   return (
-    <ScoresPoller>
+    <ScoresPoller hasLiveGames={hasLiveGames}>
       {scores.length > 0 ? (
         <Scoreboard scores={scores} />
       ) : (

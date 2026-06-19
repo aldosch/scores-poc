@@ -18,7 +18,14 @@ export interface Score {
   updatedAt: string;
 }
 
-export async function getScores(): Promise<Score[]> {
+// Mirror of `back`'s response shape. Kept in sync manually since there's no
+// shared types package in this monorepo.
+export interface ScoresResponse {
+  scores: Score[];
+  hasLiveGames: boolean;
+}
+
+export async function getScores(): Promise<ScoresResponse> {
   const backUrl = process.env.BACK_URL;
   const secret = process.env.BACK_API_SECRET;
 
@@ -41,11 +48,11 @@ export async function getScores(): Promise<Score[]> {
 // Used by the page so a transient `back` outage (or `back` not running during a
 // local build) degrades to an empty board instead of failing the whole render.
 // ISR will re-attempt on the next revalidation window.
-export async function getScoresSafe(): Promise<Score[]> {
+export async function getScoresSafe(): Promise<ScoresResponse> {
   try {
     return await getScores();
   } catch (err) {
     console.error("[scores] failed to fetch from back:", err);
-    return [];
+    return { scores: [], hasLiveGames: false };
   }
 }
