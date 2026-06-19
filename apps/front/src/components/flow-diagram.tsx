@@ -462,9 +462,7 @@ export function FlowDiagram() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
-          Efficient near-realtime scores
-        </CardTitle>
+        <CardTitle className="text-base">Data flow</CardTitle>
         <CardDescription>
           Animated from the live poll state. Every client hits the CDN, which
           serves the cached page without running the ISR function. Only when the

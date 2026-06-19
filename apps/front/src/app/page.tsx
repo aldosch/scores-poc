@@ -81,7 +81,7 @@ export default async function Page() {
               LIVE SCORES · POC
             </Badge>
             <h1 className="text-balance font-semibold text-3xl tracking-tight sm:text-4xl">
-              Near-realtime scores without realtime infrastructure.
+              Efficient near-realtime scores.
             </h1>
             <p className="text-pretty text-muted-foreground leading-relaxed">
               One CDN-cached page, refreshed on the client with adaptive
