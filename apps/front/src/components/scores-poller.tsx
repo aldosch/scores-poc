@@ -16,9 +16,17 @@
 //      while games are live. Any interaction snaps back to the fast cadence.
 // A recursive setTimeout (rather than setInterval) lets the next delay be
 // recomputed from the latest signals before each poll.
+//
+// The `usePollEmitter()` calls are observability only — they feed the visualiser
+// and do not influence polling behaviour. Strip them and the poller still works.
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
+import {
+  type PollPhase,
+  type PollReason,
+  usePollEmitter,
+} from "@/components/poll-monitor";
 
 const FAST_INTERVAL_MS = 5_000;
 const SLOW_INTERVAL_MS = 60_000;
@@ -34,6 +42,7 @@ export function ScoresPoller({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const emit = usePollEmitter();
 
   // Keep the latest `hasLiveGames` in a ref so the scheduling loop (set up once)
   // always reads the current value rather than the one captured at mount.
@@ -53,24 +62,41 @@ export function ScoresPoller({
       });
     };
 
-    const nextDelay = () => {
-      let base: number;
+    // Decide the next cadence from the two signals.
+    const resolve = (): {
+      reason: PollReason;
+      phase: PollPhase;
+      base: number;
+    } => {
       if (!hasLiveGamesRef.current) {
-        base = SLOW_INTERVAL_MS;
-      } else if (Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS) {
-        base = SLOW_INTERVAL_MS;
-      } else {
-        base = FAST_INTERVAL_MS;
+        return {
+          reason: "no-live-games",
+          phase: "slow",
+          base: SLOW_INTERVAL_MS,
+        };
       }
-      // Jitter prevents synchronized polling spikes across all clients.
-      return base + Math.random() * MAX_JITTER_MS;
+      if (Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS) {
+        return { reason: "user-idle", phase: "slow", base: SLOW_INTERVAL_MS };
+      }
+      return {
+        reason: "live-and-active",
+        phase: "fast",
+        base: FAST_INTERVAL_MS,
+      };
     };
 
     const schedule = () => {
+      const { reason, phase, base } = resolve();
+      // Jitter prevents synchronized polling spikes across all clients.
+      const delay = base + Math.random() * MAX_JITTER_MS;
+      const nextPollAt = Date.now() + delay;
+      emit({ type: "scheduled", intervalMs: base, nextPollAt, phase, reason });
+
       timeoutRef.current = setTimeout(() => {
         poll();
+        emit({ type: "poll", nextPollAt: null });
         schedule();
-      }, nextDelay());
+      }, delay);
     };
 
     const clear = () => {
@@ -82,7 +108,16 @@ export function ScoresPoller({
 
     // Record activity; the next scheduled delay picks this up automatically.
     const handleInteraction = () => {
+      const wasIdle =
+        Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS;
       lastInteractionRef.current = Date.now();
+      emit({ type: "interaction" });
+      // If we had degraded to slow due to idleness, snap back immediately
+      // rather than waiting out the current slow timeout.
+      if (wasIdle && hasLiveGamesRef.current) {
+        clear();
+        schedule();
+      }
     };
 
     const interactionEvents = [
@@ -101,10 +136,13 @@ export function ScoresPoller({
       if (document.visibilityState === "visible") {
         lastInteractionRef.current = Date.now();
         clear();
+        emit({ type: "resumed" });
         poll();
+        emit({ type: "poll", nextPollAt: null });
         schedule();
       } else {
         clear();
+        emit({ type: "paused", reason: "tab-hidden" });
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -118,7 +156,7 @@ export function ScoresPoller({
       }
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [router]);
+  }, [router, emit]);
 
   return <>{children}</>;
 }
