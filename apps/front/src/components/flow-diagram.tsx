@@ -133,40 +133,39 @@ const CLIENTS: ClientPos[] = Array.from({ length: CLIENT_COUNT }, (_, i) => {
   return { index: i, x, y, cx: x + CLIENT_W, cy: y + CLIENT_H / 2 };
 });
 
-const CLIENTS_RIGHT = CLIENT_X0 + 2 * CLIENT_W + CLIENT_COL_GAP;
-
 interface BoundaryDef {
   label: string;
   x: number;
   y: number;
   w: number;
   h: number;
+  /** Nested grouping (e.g. the `front` project) drawn subtler/tighter. */
+  inner?: boolean;
 }
 
 const PAD = 14;
-const VERCEL_X = 300 - PAD;
+const INNER_PAD = 9;
+// front = CDN cache (x=300) + ISR function (x=482, w=138 → right edge 620).
+const FRONT_X = 300 - INNER_PAD;
+const FRONT_RIGHT = 482 + NODE_W + INNER_PAD;
+// Vercel wraps front + back (back x=664, w=138 → right edge 802).
+const VERCEL_X = FRONT_X - PAD;
 const VERCEL_RIGHT = 664 + NODE_W + PAD;
 const BOUNDARIES: BoundaryDef[] = [
   {
-    label: "CLIENTS",
-    x: CLIENT_X0 - PAD,
-    y: CLIENT_Y0 - 22,
-    w: CLIENTS_RIGHT - CLIENT_X0 + PAD * 2,
-    h: 5 * CLIENT_H + 4 * CLIENT_ROW_GAP + 34,
-  },
-  {
     label: "VERCEL",
     x: VERCEL_X,
-    y: ROW_Y - 22,
+    y: ROW_Y - 30,
     w: VERCEL_RIGHT - VERCEL_X,
-    h: NODE_H + 32,
+    h: NODE_H + 48,
   },
   {
-    label: "THIRD PARTY",
-    x: 866 - PAD,
-    y: ROW_Y - 22,
-    w: 62 + PAD * 2,
-    h: NODE_H + 32,
+    label: "front",
+    x: FRONT_X,
+    y: ROW_Y - 14,
+    w: FRONT_RIGHT - FRONT_X,
+    h: NODE_H + 24,
+    inner: true,
   },
 ];
 
@@ -463,7 +462,9 @@ export function FlowDiagram() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Data flow</CardTitle>
+        <CardTitle className="text-base">
+          Efficient near-realtime scores
+        </CardTitle>
         <CardDescription>
           Animated from the live poll state. Every client hits the CDN, which
           serves the cached page without running the ISR function. Only when the
@@ -544,7 +545,8 @@ function Boundaries() {
   return (
     <g>
       {BOUNDARIES.map((b) => {
-        const labelW = b.label.length * 7.2 + 16;
+        const fontSize = b.inner ? 9 : 10;
+        const labelW = b.label.length * (b.inner ? 6.2 : 7.2) + 16;
         return (
           <g key={b.label}>
             <rect
@@ -552,28 +554,33 @@ function Boundaries() {
               y={b.y}
               width={b.w}
               height={b.h}
-              rx={14}
-              className="fill-foreground/[0.015] stroke-border"
+              rx={b.inner ? 10 : 14}
+              className={cn(
+                "stroke-border",
+                b.inner ? "fill-transparent" : "fill-foreground/[0.015]",
+              )}
               strokeWidth={1}
-              strokeDasharray="5 5"
+              strokeDasharray={b.inner ? "3 4" : "5 5"}
+              strokeOpacity={b.inner ? 0.55 : 1}
             />
             <rect
               x={b.x + 12}
               y={b.y - 10}
               width={labelW}
-              height={20}
+              height={b.inner ? 18 : 20}
               rx={5}
               className="fill-background stroke-border"
               strokeWidth={1}
+              strokeOpacity={b.inner ? 0.55 : 1}
             />
             <text
               x={b.x + 12 + labelW / 2}
-              y={b.y + 3}
+              y={b.y + (b.inner ? 2.5 : 3)}
               textAnchor="middle"
               className="fill-muted-foreground"
-              fontSize={10}
+              fontSize={fontSize}
               fontFamily="var(--font-geist-mono), monospace"
-              letterSpacing="0.12em"
+              letterSpacing={b.inner ? "0.04em" : "0.12em"}
             >
               {b.label}
             </text>
