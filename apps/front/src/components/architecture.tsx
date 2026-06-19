@@ -5,6 +5,7 @@
 // Prompt / Docs sections underneath. Styled after the customer-notes template.
 
 import {
+  BookOpenText,
   CircleHelp,
   Code2,
   Layers,
@@ -400,7 +401,7 @@ export function Architecture() {
                 {part.docs && part.docs.length > 0 && (
                   <Section
                     value={`${part.id}-docs`}
-                    icon={CircleHelp}
+                    icon={BookOpenText}
                     label="Docs"
                   >
                     <RefRow label="Docs">
