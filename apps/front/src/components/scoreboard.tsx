@@ -12,6 +12,18 @@ const STATUS_LABEL: Record<Score["status"], string> = {
   final: "Final",
 };
 
+// Format deterministically in UTC. This is a Server Component that is both
+// prerendered (ISR, on the server) and re-rendered on the client during
+// router.refresh(); using a fixed timezone keeps the output identical in both
+// environments and avoids a hydration mismatch (toLocaleTimeString() would vary
+// by the runtime's timezone/locale).
+const TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZone: "UTC",
+});
+
 export function Scoreboard({ scores }: { scores: Score[] }) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -44,7 +56,7 @@ export function Scoreboard({ scores }: { scores: Score[] }) {
                 : ""}
             </span>
             <span className="tabular-nums">
-              updated {new Date(game.updatedAt).toLocaleTimeString()}
+              updated {TIME_FORMATTER.format(new Date(game.updatedAt))} UTC
             </span>
           </div>
         </div>

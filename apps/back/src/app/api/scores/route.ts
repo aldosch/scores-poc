@@ -5,9 +5,11 @@
 // mock data so engineers can clearly see values change over time as the data
 // flows: back -> front ISR cache -> RSC payload -> reconciled DOM.
 //
-// Auth is enforced at the Vercel edge by a Firewall rule that blocks any request
-// whose `x-api-secret` header does not match BACK_API_SECRET. This function only
-// executes for callers that already passed that check — see vercel.json.
+// Auth is enforced at the Vercel edge by a Firewall rule ("Require x-api-secret")
+// that denies any request whose `x-api-secret` header does not match
+// BACK_API_SECRET. The rule is configured on the Vercel project (Firewall
+// settings), not in code, so this function only executes for callers that
+// already passed that check at the edge.
 
 export const dynamic = "force-dynamic";
 
