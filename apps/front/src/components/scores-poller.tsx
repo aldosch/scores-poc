@@ -17,21 +17,44 @@
 // A recursive setTimeout (rather than setInterval) lets the next delay be
 // recomputed from the latest signals before each poll.
 //
+// `override` is a demo-only escape hatch: when set, it forces a specific
+// condition instead of deriving one from the live signals, so the different
+// behaviours can be observed on demand. It is null in normal operation.
+//
 // The `usePollEmitter()` calls are observability only — they feed the visualiser
-// and do not influence polling behaviour. Strip them and the poller still works.
+// and do not influence polling behaviour.
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
 import {
+  type ForceMode,
   type PollPhase,
   type PollReason,
   usePollEmitter,
+  usePollOverride,
 } from "@/components/poll-monitor";
 
 const FAST_INTERVAL_MS = 5_000;
 const SLOW_INTERVAL_MS = 60_000;
 const IDLE_THRESHOLD_MS = 120_000;
 const MAX_JITTER_MS = 2_000;
+
+type Cadence = { reason: PollReason; phase: PollPhase; base: number };
+
+const CADENCE: Record<ForceMode, Cadence> = {
+  "live-and-active": {
+    reason: "live-and-active",
+    phase: "fast",
+    base: FAST_INTERVAL_MS,
+  },
+  "no-live-games": {
+    reason: "no-live-games",
+    phase: "slow",
+    base: SLOW_INTERVAL_MS,
+  },
+  "user-idle": { reason: "user-idle", phase: "slow", base: SLOW_INTERVAL_MS },
+  "tab-hidden": { reason: "tab-hidden", phase: "slow", base: SLOW_INTERVAL_MS },
+};
 
 export function ScoresPoller({
   hasLiveGames,
@@ -43,11 +66,12 @@ export function ScoresPoller({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const emit = usePollEmitter();
+  const { override } = usePollOverride();
 
-  // Keep the latest `hasLiveGames` in a ref so the scheduling loop (set up once)
-  // always reads the current value rather than the one captured at mount.
+  // Keep the latest signals in refs so the scheduling loop reads current values.
   const hasLiveGamesRef = useRef(hasLiveGames);
   hasLiveGamesRef.current = hasLiveGames;
+  const overrideRef = useRef(override);
 
   // Timestamp of the last user interaction. Drives the idle-degradation logic.
   const lastInteractionRef = useRef(Date.now());
@@ -56,33 +80,25 @@ export function ScoresPoller({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Sync the override into the ref so the loop reads the current forced mode.
+    // Changing `override` re-runs this effect, restarting the loop cleanly.
+    overrideRef.current = override;
+
     const poll = () => {
       startTransition(() => {
         router.refresh();
       });
     };
 
-    // Decide the next cadence from the two signals.
-    const resolve = (): {
-      reason: PollReason;
-      phase: PollPhase;
-      base: number;
-    } => {
-      if (!hasLiveGamesRef.current) {
-        return {
-          reason: "no-live-games",
-          phase: "slow",
-          base: SLOW_INTERVAL_MS,
-        };
-      }
+    // Decide the next cadence. A forced override wins; otherwise derive it from
+    // the two live signals.
+    const resolve = (): Cadence => {
+      if (overrideRef.current) return CADENCE[overrideRef.current];
+      if (!hasLiveGamesRef.current) return CADENCE["no-live-games"];
       if (Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS) {
-        return { reason: "user-idle", phase: "slow", base: SLOW_INTERVAL_MS };
+        return CADENCE["user-idle"];
       }
-      return {
-        reason: "live-and-active",
-        phase: "fast",
-        base: FAST_INTERVAL_MS,
-      };
+      return CADENCE["live-and-active"];
     };
 
     const schedule = () => {
@@ -106,16 +122,19 @@ export function ScoresPoller({
       }
     };
 
-    // Record activity; the next scheduled delay picks this up automatically.
-    // We deliberately do NOT log every raw event (they fire constantly and would
-    // drown the log). We only surface an interaction when it actually changes
-    // behaviour: snapping back to the fast cadence after an idle period.
+    // Whether polling should currently be paused (real hidden tab or forced).
+    const isHidden = () =>
+      overrideRef.current === "tab-hidden" ||
+      document.visibilityState === "hidden";
+
     const handleInteraction = () => {
       const wasIdle =
         Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS;
       lastInteractionRef.current = Date.now();
-      if (wasIdle && hasLiveGamesRef.current) {
-        emit({ type: "interaction" });
+      emit({ type: "interaction" });
+      // If idleness had degraded us to slow, snap back immediately rather than
+      // waiting out the current slow timeout. (No effect when overridden.)
+      if (wasIdle && !overrideRef.current && hasLiveGamesRef.current) {
         clear();
         schedule();
       }
@@ -132,8 +151,9 @@ export function ScoresPoller({
     }
 
     // Pause while the tab is hidden; on becoming visible, reset the idle timer,
-    // refresh immediately, and resume the scheduling loop at the fast cadence.
+    // refresh immediately, and resume the scheduling loop.
     const handleVisibility = () => {
+      if (overrideRef.current === "tab-hidden") return; // forced, ignore real tab
       if (document.visibilityState === "visible") {
         lastInteractionRef.current = Date.now();
         clear();
@@ -148,7 +168,13 @@ export function ScoresPoller({
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    schedule();
+    // Start (or, on override change, restart) the loop. If we're meant to be
+    // paused, emit the paused state instead of scheduling.
+    if (isHidden()) {
+      emit({ type: "paused", reason: "tab-hidden" });
+    } else {
+      schedule();
+    }
 
     return () => {
       clear();
@@ -157,7 +183,7 @@ export function ScoresPoller({
       }
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [router, emit]);
+  }, [router, emit, override]);
 
   return <>{children}</>;
 }

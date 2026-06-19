@@ -5,8 +5,12 @@
 // router.refresh() calls re-fetch this page's RSC payload from that same cache,
 // not from `back`.
 //
-// Layout: the interactive demo (live game + "under the hood" visualiser) comes
-// first, then a breakdown of how the whole solution is put together.
+// Layout:
+//   - On small screens it's a single column: header, live demo, then the
+//     "how it's built" breakdown.
+//   - On large screens the live demo (game + visualiser) sits in a sticky left
+//     column while the header and breakdown scroll on the right, so the live
+//     components stay visible while reading.
 
 import { Architecture } from "@/components/architecture";
 import { LiveGameCard } from "@/components/live-game-card";
@@ -21,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { REPO_URL } from "@/lib/repo";
 import { getScoresSafe } from "@/lib/scores";
 
 export const revalidate = 5;
@@ -31,10 +36,45 @@ export default async function Page() {
   // returns the full board; the front just picks the first game to display.
   const game = scores[0] ?? null;
 
+  // The interactive demo. Scoped by PollMonitorProvider so the poller publishes
+  // events and the visualiser reads them.
+  const demo = (
+    <PollMonitorProvider>
+      <div className="flex flex-col gap-6">
+        <ScoresPoller hasLiveGames={hasLiveGames}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Live game</CardTitle>
+              <CardDescription>
+                Scores and clock update in place via{" "}
+                <code className="font-mono text-[0.85em]">
+                  router.refresh()
+                </code>
+                , no full reload.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {game ? (
+                <LiveGameCard game={game} />
+              ) : (
+                <p className="py-6 text-center text-muted-foreground text-sm">
+                  No scores available right now. Retrying on the next
+                  revalidation window…
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </ScoresPoller>
+
+        <PollVisualiser />
+      </div>
+    </PollMonitorProvider>
+  );
+
   return (
     <div className="min-h-svh bg-background text-foreground">
-      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-5 py-12 sm:py-16">
-        <header className="flex flex-col gap-3">
+      <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-12 sm:py-16">
+        <header className="flex max-w-2xl flex-col gap-3">
           <Badge
             variant="outline"
             className="w-fit font-mono text-[11px] tracking-wider"
@@ -51,48 +91,23 @@ export default async function Page() {
           </p>
         </header>
 
-        {/* PollMonitorProvider scopes the demo: the poller publishes events and
-            the visualiser reads them. Both live inside, the explainer outside. */}
-        <PollMonitorProvider>
-          <ScoresPoller hasLiveGames={hasLiveGames}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Live game</CardTitle>
-                <CardDescription>
-                  Scores and clock update in place via{" "}
-                  <code className="font-mono text-[0.85em]">
-                    router.refresh()
-                  </code>
-                  , no full reload.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {game ? (
-                  <LiveGameCard game={game} />
-                ) : (
-                  <p className="py-6 text-center text-muted-foreground text-sm">
-                    No scores available right now. Retrying on the next
-                    revalidation window…
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </ScoresPoller>
+        <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-12">
+          {/* Live demo: appears first on mobile; sticky left column on desktop. */}
+          <div className="lg:sticky lg:top-12">{demo}</div>
 
-          <PollVisualiser />
-        </PollMonitorProvider>
-
-        <Architecture />
+          {/* Explainer: the scrolling reading column on desktop. */}
+          <Architecture />
+        </div>
 
         <footer className="flex items-center justify-between border-t pt-6 text-muted-foreground text-xs">
           <span>Live Scores POC</span>
           <a
-            href="https://github.com"
+            href={REPO_URL}
             className="hover:text-foreground"
             target="_blank"
             rel="noreferrer"
           >
-            two-app architecture
+            aldosch/scores-poc
           </a>
         </footer>
       </main>

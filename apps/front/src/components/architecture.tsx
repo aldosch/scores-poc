@@ -24,6 +24,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { sourceUrl } from "@/lib/repo";
 import { cn } from "@/lib/utils";
 
 type Skill = { name: string; href: string };
@@ -35,7 +36,14 @@ type Part = {
   tag: string;
   what: React.ReactNode;
   why?: React.ReactNode;
-  code?: { filename: string; language: string; source: string };
+  // `path`/`lines` link the snippet to the real source on GitHub.
+  code?: {
+    filename: string;
+    language: string;
+    source: string;
+    path: string;
+    lines?: string;
+  };
   prompt?: string;
   docs?: { href: string; label: string }[];
   skills?: Skill[];
@@ -159,6 +167,8 @@ export default async function Page() {
     code: {
       filename: "apps/front/src/components/scores-poller.tsx",
       language: "tsx",
+      path: "apps/front/src/components/scores-poller.tsx",
+      lines: "L87-L91",
       source: `const poll = () => {
   startTransition(() => {
     router.refresh();
@@ -215,6 +225,8 @@ export default async function Page() {
     code: {
       filename: "apps/front/src/components/scores-poller.tsx",
       language: "tsx",
+      path: "apps/front/src/components/scores-poller.tsx",
+      lines: "L95-L114",
       source: `const resolve = () => {
   if (!hasLiveGamesRef.current)
     return { phase: "slow", base: SLOW_INTERVAL_MS };  // 60s
@@ -255,6 +267,8 @@ const delay = base + Math.random() * MAX_JITTER_MS;    // jitter`,
     code: {
       filename: "apps/front/src/lib/scores.ts",
       language: "ts",
+      path: "apps/front/src/lib/scores.ts",
+      lines: "L35-L42",
       source: `const res = await fetch(\`\${backUrl}/api/scores\`, {
   headers: { "x-api-secret": secret }, // server-only env var
   next: { revalidate: 5 },             // participate in ISR, do not opt out
@@ -313,14 +327,14 @@ export function Architecture() {
               id={part.id}
               className="scroll-mt-8 rounded-xl border bg-card p-5"
             >
-              <div className="mb-3 flex items-start gap-3">
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border bg-muted/50">
                   <Icon className="size-4 text-muted-foreground" />
                 </span>
                 <h3 className="flex-1 font-medium text-base leading-snug">
                   {part.title}
                 </h3>
-                <span className="shrink-0 rounded-md border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+                <span className="shrink-0 self-start rounded-md border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
                   {part.tag}
                 </span>
               </div>
@@ -351,6 +365,14 @@ export function Architecture() {
                     >
                       {part.code.source}
                     </CodeBlock>
+                    <div className="mt-2 flex justify-end">
+                      <DocLink
+                        href={sourceUrl(part.code.path, part.code.lines)}
+                        className="text-muted-foreground text-xs"
+                      >
+                        View on GitHub
+                      </DocLink>
+                    </div>
                   </Section>
                 )}
 

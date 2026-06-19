@@ -9,7 +9,9 @@
 
 import {
   Activity,
+  EyeOff,
   Hand,
+  MoonStar,
   Pause,
   Play,
   RefreshCw,
@@ -20,7 +22,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   type ActivityEntry,
   type ActivityKind,
+  type ForceMode,
   reasonLabel,
+  usePollOverride,
   usePollState,
 } from "@/components/poll-monitor";
 import { RelativeTime } from "@/components/relative-time";
@@ -52,8 +56,45 @@ const KIND_COLOR: Record<ActivityKind, string> = {
   interaction: "text-violet-600 dark:text-violet-400",
 };
 
+// The forceable modes shown as toggles. Order matters for display.
+const FORCE_MODES: {
+  mode: ForceMode;
+  label: string;
+  icon: typeof Activity;
+  active: string;
+}[] = [
+  {
+    mode: "live-and-active",
+    label: "Fast",
+    icon: Zap,
+    active:
+      "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  {
+    mode: "no-live-games",
+    label: "No live games",
+    icon: MoonStar,
+    active:
+      "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  {
+    mode: "user-idle",
+    label: "User idle",
+    icon: Hand,
+    active:
+      "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  {
+    mode: "tab-hidden",
+    label: "Tab hidden",
+    icon: EyeOff,
+    active: "border-border bg-muted text-foreground",
+  },
+];
+
 export function PollVisualiser() {
   const state = usePollState();
+  const { override, setOverride } = usePollOverride();
   const isPaused = state.status === "paused";
 
   return (
@@ -75,7 +116,7 @@ export function PollVisualiser() {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-3 gap-3">
           <Countdown
             nextPollAt={state.nextPollAt}
             intervalMs={state.intervalMs}
@@ -87,16 +128,69 @@ export function PollVisualiser() {
             hint={reasonLabel(state.reason)}
           />
           <Stat label="Polls fired" value={String(state.pollCount)} />
-          <Stat
-            label="Mode"
-            value={state.phase === "fast" ? "Fast" : "Slow"}
-            hint={state.phase === "fast" ? "live + active" : "throttled"}
-          />
         </div>
+
+        <ModeToggles
+          activeReason={state.reason}
+          override={override}
+          onToggle={(mode) => setOverride(override === mode ? null : mode)}
+        />
 
         <ActivityLog log={state.log} />
       </CardContent>
     </Card>
+  );
+}
+
+// The mode row doubles as a live indicator and a demo control. The mode matching
+// the current reason is shown as "active" (driven by the live signals); clicking
+// any mode forces it until clicked again. A forced mode is outlined distinctly.
+function ModeToggles({
+  activeReason,
+  override,
+  onToggle,
+}: {
+  activeReason: ForceMode;
+  override: ForceMode | null;
+  onToggle: (mode: ForceMode) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
+          Mode
+        </span>
+        <span className="text-[11px] text-muted-foreground">
+          {override ? "forced — click again to resume auto" : "tap to simulate"}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {FORCE_MODES.map(({ mode, label, icon: Icon, active }) => {
+          const isLive = !override && activeReason === mode;
+          const isForced = override === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onToggle(mode)}
+              aria-pressed={isForced}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-left font-medium text-xs transition-colors",
+                "hover:bg-muted/60",
+                isForced
+                  ? cn(active, "ring-1 ring-current/30")
+                  : isLive
+                    ? active
+                    : "border-border bg-muted/20 text-muted-foreground",
+              )}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -239,7 +333,7 @@ function Stat({
         {value}
       </span>
       {hint && (
-        <span className="truncate text-[11px] text-muted-foreground">
+        <span className="text-pretty text-[11px] text-muted-foreground leading-tight">
           {hint}
         </span>
       )}
@@ -287,6 +381,14 @@ function LogRow({
     >
       <Icon className={cn("size-3.5 shrink-0", KIND_COLOR[entry.kind])} />
       <span className="flex-1 truncate">{entry.message}</span>
+      {entry.count > 1 && (
+        <Badge
+          variant="outline"
+          className="shrink-0 border-violet-500/30 bg-violet-500/10 px-1.5 py-0 font-mono text-[10px] text-violet-700 tabular-nums dark:text-violet-300"
+        >
+          ×{entry.count}
+        </Badge>
+      )}
       <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
         <RelativeTime iso={new Date(entry.at).toISOString()} />
       </span>
