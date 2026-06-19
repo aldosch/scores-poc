@@ -228,8 +228,10 @@
   --chart-flash-fg: oklch(0.32 0.07 155);
 
   /* Flow diagram palette (one hue per node). */
-  --flow-browser: oklch(0.62 0.19 264); /* indigo */
-  --flow-edge: oklch(0.6 0.15 155); /* emerald */
+  --flow-browser: oklch(0.62 0.19 264); /* indigo — the real "You" client */
+  --flow-peer: oklch(0.6 0.06 264); /* muted indigo — simulated peers */
+  --flow-cdn: oklch(0.6 0.13 195); /* cyan — CDN cache hits */
+  --flow-edge: oklch(0.6 0.15 155); /* emerald — ISR function */
   --flow-back: oklch(0.7 0.16 70); /* amber */
   --flow-api: oklch(0.62 0.21 16); /* red */
   --flow-idle: oklch(0.85 0 0 / 40%);
@@ -243,6 +245,8 @@
     --chart-flash-fg: oklch(0.96 0.02 155);
 
     --flow-browser: oklch(0.7 0.16 264);
+    --flow-peer: oklch(0.62 0.05 264);
+    --flow-cdn: oklch(0.72 0.13 195);
     --flow-edge: oklch(0.72 0.15 155);
     --flow-back: oklch(0.78 0.15 70);
     --flow-api: oklch(0.7 0.19 16);
