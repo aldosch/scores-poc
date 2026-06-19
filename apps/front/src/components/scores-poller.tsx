@@ -107,14 +107,15 @@ export function ScoresPoller({
     };
 
     // Record activity; the next scheduled delay picks this up automatically.
+    // We deliberately do NOT log every raw event (they fire constantly and would
+    // drown the log). We only surface an interaction when it actually changes
+    // behaviour: snapping back to the fast cadence after an idle period.
     const handleInteraction = () => {
       const wasIdle =
         Date.now() - lastInteractionRef.current > IDLE_THRESHOLD_MS;
       lastInteractionRef.current = Date.now();
-      emit({ type: "interaction" });
-      // If we had degraded to slow due to idleness, snap back immediately
-      // rather than waiting out the current slow timeout.
       if (wasIdle && hasLiveGamesRef.current) {
+        emit({ type: "interaction" });
         clear();
         schedule();
       }

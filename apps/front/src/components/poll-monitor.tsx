@@ -173,7 +173,11 @@ export function PollMonitorProvider({
           case "interaction":
             return {
               ...prev,
-              log: pushLog(prev, "interaction", "User interaction detected"),
+              log: pushLog(
+                prev,
+                "interaction",
+                "Interaction after idle, back to fast",
+              ),
             };
           default:
             return prev;

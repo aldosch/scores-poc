@@ -45,8 +45,7 @@ export function RollingNumber({
         <span
           key={`out-${animKey.current}`}
           aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ animation: "digit-out 0.45s ease-out forwards" }}
+          className="absolute inset-0 flex animate-digit-out items-center justify-center"
         >
           {prev}
         </span>
@@ -54,12 +53,7 @@ export function RollingNumber({
       {/* Incoming / current digit. */}
       <span
         key={`in-${animKey.current}`}
-        className="block"
-        style={
-          animating
-            ? { animation: "digit-in 0.45s ease-out forwards" }
-            : undefined
-        }
+        className={cn("block", animating && "animate-digit-in")}
       >
         {display}
       </span>
