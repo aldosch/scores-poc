@@ -3,15 +3,16 @@
 // apps/front/src/components/flow-diagram.tsx
 //
 // A live architecture diagram that animates from the REAL poll state, plus a
-// couple of simulated peers, to show how the design behaves at scale.
+// fleet of simulated peers, to show how the design behaves at scale.
 //
-//   • Three browser clients poll independently. The highlighted one ("You") is
-//     the real session and fires on actual polls; the other two are illustrative
-//     peers on their own staggered timers. All three hit the CDN.
-//   • The CDN serves the cached page WITHOUT running the ISR function — this is
-//     the common case, and it's why cost doesn't scale with viewers.
-//   • Only when the cache is stale does the CDN run the ISR function, which then
-//     calls back, which calls the third-party provider. That regenerated page is
+//   • Ten browser clients poll independently. The highlighted one ("You") is the
+//     real session and fires on actual polls; the other nine are simulated peers
+//     that drift between active / idle / hidden over time (just like real users),
+//     so their polling cadence rises and falls. All hit the CDN.
+//   • The CDN serves the cached page WITHOUT running the ISR function — the
+//     common case, and why cost doesn't scale with viewers.
+//   • Only when the cache is stale does the CDN run the ISR function, which calls
+//     back, which calls the third-party provider. That regenerated page is then
 //     cached and shared by every subsequent client.
 //
 // The revalidation cadence is illustrative: a browser can't observe an edge
@@ -38,15 +39,14 @@ import {
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Geometry. Smaller nodes; CDN + ISR + back share one "VERCEL" boundary (back
-// is the same platform, just a separate project), with the provider outside it.
+// Geometry.
 // ---------------------------------------------------------------------------
-const VB = { w: 940, h: 322 };
+const VB = { w: 960, h: 300 };
 
-type NodeId = "you" | "peer1" | "peer2" | "cdn" | "isr" | "back" | "api";
+type ServiceId = "cdn" | "isr" | "back" | "api";
 
-interface NodeDef {
-  id: NodeId;
+interface ServiceNode {
+  id: ServiceId;
   label: string;
   sublabel: string;
   icon: typeof Globe;
@@ -55,65 +55,20 @@ interface NodeDef {
   y: number;
   w: number;
   h: number;
-  /** The real session — rendered with a "You" marker and stronger presence. */
-  primary?: boolean;
 }
 
-// Browser column (left). Three stacked clients.
-const BROWSER_W = 132;
-const BROWSER_H = 62;
-const BROWSER_X = 8;
-const BROWSER_YS = [36, 128, 220];
-
-// Backend row (right), vertically centred against the browser stack.
-const ROW_Y = 120;
+const ROW_Y = 110;
 const NODE_H = 78;
-const NODE_W = 142;
+const NODE_W = 138;
 
-const NODES: NodeDef[] = [
-  // Browsers
-  {
-    id: "you",
-    label: "You",
-    sublabel: "this tab",
-    icon: MonitorSmartphone,
-    color: "var(--flow-browser)",
-    x: BROWSER_X,
-    y: BROWSER_YS[0],
-    w: BROWSER_W,
-    h: BROWSER_H,
-    primary: true,
-  },
-  {
-    id: "peer1",
-    label: "Client",
-    sublabel: "another viewer",
-    icon: MonitorSmartphone,
-    color: "var(--flow-peer)",
-    x: BROWSER_X,
-    y: BROWSER_YS[1],
-    w: BROWSER_W,
-    h: BROWSER_H,
-  },
-  {
-    id: "peer2",
-    label: "Client",
-    sublabel: "another viewer",
-    icon: MonitorSmartphone,
-    color: "var(--flow-peer)",
-    x: BROWSER_X,
-    y: BROWSER_YS[2],
-    w: BROWSER_W,
-    h: BROWSER_H,
-  },
-  // Edge
+const SERVICES: ServiceNode[] = [
   {
     id: "cdn",
     label: "CDN cache",
     sublabel: "cached HTML",
     icon: DatabaseZap,
     color: "var(--flow-cdn)",
-    x: 256,
+    x: 300,
     y: ROW_Y,
     w: NODE_W,
     h: NODE_H,
@@ -124,7 +79,7 @@ const NODES: NodeDef[] = [
     sublabel: "runs when stale",
     icon: Zap,
     color: "var(--flow-edge)",
-    x: 444,
+    x: 482,
     y: ROW_Y,
     w: NODE_W,
     h: NODE_H,
@@ -135,24 +90,50 @@ const NODES: NodeDef[] = [
     sublabel: "/api/scores",
     icon: Server,
     color: "var(--flow-back)",
-    x: 632,
+    x: 664,
     y: ROW_Y,
     w: NODE_W,
     h: NODE_H,
   },
-  // Third party
   {
     id: "api",
     label: "Provider",
     sublabel: "third party",
     icon: Globe,
     color: "var(--flow-api)",
-    x: 838,
+    x: 866,
     y: ROW_Y,
-    w: 64,
+    w: 62,
     h: NODE_H,
   },
 ];
+
+// Ten clients in a compact 2-column × 5-row grid on the left.
+const CLIENT_COUNT = 10;
+const CLIENT_W = 96;
+const CLIENT_H = 36;
+const CLIENT_COL_GAP = 10;
+const CLIENT_ROW_GAP = 9;
+const CLIENT_X0 = 8;
+const CLIENT_Y0 = 26;
+
+interface ClientPos {
+  index: number;
+  x: number;
+  y: number;
+  cx: number; // right-edge centre, where its connection leaves
+  cy: number;
+}
+
+const CLIENTS: ClientPos[] = Array.from({ length: CLIENT_COUNT }, (_, i) => {
+  const col = i % 2;
+  const row = Math.floor(i / 2);
+  const x = CLIENT_X0 + col * (CLIENT_W + CLIENT_COL_GAP);
+  const y = CLIENT_Y0 + row * (CLIENT_H + CLIENT_ROW_GAP);
+  return { index: i, x, y, cx: x + CLIENT_W, cy: y + CLIENT_H / 2 };
+});
+
+const CLIENTS_RIGHT = CLIENT_X0 + 2 * CLIENT_W + CLIENT_COL_GAP;
 
 interface BoundaryDef {
   label: string;
@@ -160,82 +141,69 @@ interface BoundaryDef {
   y: number;
   w: number;
   h: number;
-  /** Dotted inner grouping (e.g. the separate `back` project) drawn subtler. */
-  inner?: boolean;
 }
 
 const PAD = 14;
-const VERCEL_X = 256 - PAD;
-const VERCEL_RIGHT = 632 + NODE_W + PAD;
+const VERCEL_X = 300 - PAD;
+const VERCEL_RIGHT = 664 + NODE_W + PAD;
 const BOUNDARIES: BoundaryDef[] = [
   {
     label: "CLIENTS",
-    x: BROWSER_X - PAD,
-    y: BROWSER_YS[0] - 24,
-    w: BROWSER_W + PAD * 2,
-    h: BROWSER_YS[2] + BROWSER_H - BROWSER_YS[0] + 36,
+    x: CLIENT_X0 - PAD,
+    y: CLIENT_Y0 - 22,
+    w: CLIENTS_RIGHT - CLIENT_X0 + PAD * 2,
+    h: 5 * CLIENT_H + 4 * CLIENT_ROW_GAP + 34,
   },
   {
-    // Everything on Vercel: CDN + ISR function (front project) and back.
     label: "VERCEL",
     x: VERCEL_X,
-    y: ROW_Y - 24,
+    y: ROW_Y - 22,
     w: VERCEL_RIGHT - VERCEL_X,
-    h: NODE_H + 36,
-  },
-  {
-    // back is the same platform but a separate project — subtle inner group.
-    label: "back · separate project",
-    x: 632 - 10,
-    y: ROW_Y - 12,
-    w: NODE_W + 20,
-    h: NODE_H + 22,
-    inner: true,
+    h: NODE_H + 32,
   },
   {
     label: "THIRD PARTY",
-    x: 838 - PAD,
-    y: ROW_Y - 24,
-    w: 64 + PAD * 2,
-    h: NODE_H + 36,
+    x: 866 - PAD,
+    y: ROW_Y - 22,
+    w: 62 + PAD * 2,
+    h: NODE_H + 32,
   },
 ];
 
-function nodeById(id: NodeId): NodeDef {
+function serviceById(id: ServiceId): ServiceNode {
   // biome-ignore lint/style/noNonNullAssertion: ids are static and known
-  return NODES.find((n) => n.id === id)!;
+  return SERVICES.find((n) => n.id === id)!;
 }
 
-// Curved path from a browser's right edge to the CDN's left edge.
-function browserToCdnPath(browser: NodeId): string {
-  const a = nodeById(browser);
-  const cdn = nodeById("cdn");
-  const x1 = a.x + a.w;
-  const y1 = a.y + a.h / 2;
+// Curved path from a client's right edge to the CDN's left edge.
+function clientToCdnPath(c: ClientPos): string {
+  const cdn = serviceById("cdn");
   const x2 = cdn.x;
   const y2 = cdn.y + cdn.h / 2;
-  const midX = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+  const midX = (c.cx + x2) / 2;
+  return `M ${c.cx} ${c.cy} C ${midX} ${c.cy}, ${midX} ${y2}, ${x2} ${y2}`;
 }
 
-// Straight horizontal path between two row-aligned nodes.
-function rowPath(from: NodeId, to: NodeId): string {
-  const a = nodeById(from);
-  const b = nodeById(to);
+function rowPath(from: ServiceId, to: ServiceId): string {
+  const a = serviceById(from);
+  const b = serviceById(to);
   const y = a.y + a.h / 2;
   return `M ${a.x + a.w} ${y} L ${b.x} ${y}`;
 }
 
+const CLIENT_CONN_IDS = CLIENTS.map((c) => `client${c.index}-cdn`);
 const CONNECTIONS: { id: string; d: string }[] = [
-  { id: "you-cdn", d: browserToCdnPath("you") },
-  { id: "peer1-cdn", d: browserToCdnPath("peer1") },
-  { id: "peer2-cdn", d: browserToCdnPath("peer2") },
+  ...CLIENTS.map((c) => ({
+    id: `client${c.index}-cdn`,
+    d: clientToCdnPath(c),
+  })),
   { id: "cdn-isr", d: rowPath("cdn", "isr") },
   { id: "isr-back", d: rowPath("isr", "back") },
   { id: "back-api", d: rowPath("back", "api") },
 ];
 
 type Flow = "poll" | "revalidate";
+type ClientMode = "active" | "idle" | "hidden";
 
 interface ActiveParticle {
   id: string;
@@ -246,15 +214,43 @@ interface ActiveParticle {
 }
 
 const REVALIDATE_WINDOW_MS = 5_000;
-// Independent cadence for the two simulated peers (ms). Staggered + jittered so
-// they visibly fire at different times from each other and from the real tab.
-const PEER_BASE_MS = [6_300, 8_100];
+
+// Per-mode polling cadence (ms) for simulated peers. Hidden peers don't poll.
+const MODE_INTERVAL: Record<Exclude<ClientMode, "hidden">, number> = {
+  active: 5_000,
+  idle: 60_000,
+};
+
+function rand(min: number, max: number) {
+  return min + Math.random() * (max - min);
+}
+
+// Weighted next mode: mostly active, sometimes idle, occasionally hidden.
+function nextMode(): ClientMode {
+  const r = Math.random();
+  if (r < 0.55) return "active";
+  if (r < 0.85) return "idle";
+  return "hidden";
+}
+
+interface PeerState {
+  mode: ClientMode;
+  nextPollAt: number;
+  nextModeChangeAt: number;
+}
 
 export function FlowDiagram() {
   const state = usePollState();
   const [particles, setParticles] = useState<ActiveParticle[]>([]);
-  const [activeNodes, setActiveNodes] = useState<Map<NodeId, Flow>>(new Map());
+  const [activeServices, setActiveServices] = useState<Map<ServiceId, Flow>>(
+    new Map(),
+  );
   const [activeConns, setActiveConns] = useState<Map<string, Flow>>(new Map());
+  // Lit clients (just polled) and each peer's current mode for styling.
+  const [litClients, setLitClients] = useState<Set<number>>(new Set());
+  const [clientModes, setClientModes] = useState<Map<number, ClientMode>>(
+    () => new Map(CLIENTS.map((c) => [c.index, "active" as ClientMode])),
+  );
 
   const lastPollRef = useRef(0);
   const lastRevalidateAtRef = useRef(0);
@@ -268,10 +264,10 @@ export function FlowDiagram() {
     addParticles(p: ActiveParticle[]) {
       setParticles((prev) => [...prev, ...p]);
     },
-    lightUp(nodes: NodeId[], conns: string[], flow: Flow, durationMs: number) {
-      setActiveNodes((prev) => {
+    litService(services: ServiceId[], conns: string[], flow: Flow, ms: number) {
+      setActiveServices((prev) => {
         const next = new Map(prev);
-        for (const n of nodes) next.set(n, flow);
+        for (const n of services) next.set(n, flow);
         return next;
       });
       setActiveConns((prev) => {
@@ -281,9 +277,9 @@ export function FlowDiagram() {
       });
       const key = `${flow}-${seqRef.current++}`;
       const t = setTimeout(() => {
-        setActiveNodes((prev) => {
+        setActiveServices((prev) => {
           const next = new Map(prev);
-          for (const n of nodes) if (next.get(n) === flow) next.delete(n);
+          for (const n of services) if (next.get(n) === flow) next.delete(n);
           return next;
         });
         setActiveConns((prev) => {
@@ -292,22 +288,31 @@ export function FlowDiagram() {
           return next;
         });
         litTimers.current.delete(key);
-      }, durationMs);
+      }, ms);
+      litTimers.current.set(key, t);
+    },
+    litClient(index: number) {
+      setLitClients((prev) => new Set(prev).add(index));
+      const key = `cl-${index}-${seqRef.current++}`;
+      const t = setTimeout(() => {
+        setLitClients((prev) => {
+          const next = new Set(prev);
+          next.delete(index);
+          return next;
+        });
+        litTimers.current.delete(key);
+      }, 950);
       litTimers.current.set(key, t);
     },
   });
 
-  // A cache hit: browser → CDN → browser. Never runs the ISR function.
-  const emitCacheHit = useRef((browser: NodeId, connId: string) => {
+  // A cache hit: client → CDN → client. Never runs the ISR function.
+  const emitCacheHit = useRef((index: number) => {
+    const connId = `client${index}-cdn`;
+    const color = index === 0 ? "var(--flow-browser)" : "var(--flow-peer)";
     const id = `c${seqRef.current++}`;
     helpers.current.addParticles([
-      {
-        id: `${id}-req`,
-        connId,
-        color: nodeById(browser).color,
-        reverse: false,
-        delay: 0,
-      },
+      { id: `${id}-req`, connId, color, reverse: false, delay: 0 },
       {
         id: `${id}-res`,
         connId,
@@ -316,17 +321,18 @@ export function FlowDiagram() {
         delay: 0.4,
       },
     ]);
-    helpers.current.lightUp([browser, "cdn"], [connId], "poll", 1000);
+    helpers.current.litClient(index);
+    helpers.current.litService(["cdn"], [connId], "poll", 1000);
   });
 
-  // The real session: fire a cache hit whenever a poll lands, and roughly once
-  // per revalidate window also run the ISR function through to the provider.
+  // The real session ("You" = client 0): fire a cache hit on every poll, and
+  // roughly once per revalidate window also run the ISR function to the provider.
   useEffect(() => {
     if (state.pollCount === lastPollRef.current) return;
     lastPollRef.current = state.pollCount;
     if (state.pollCount === 0) return;
 
-    emitCacheHit.current("you", "you-cdn");
+    emitCacheHit.current(0);
 
     const now = Date.now();
     if (
@@ -379,7 +385,7 @@ export function FlowDiagram() {
           delay: 2.5,
         },
       ]);
-      helpers.current.lightUp(
+      helpers.current.litService(
         ["cdn", "isr", "back", "api"],
         ["cdn-isr", "isr-back", "back-api"],
         "revalidate",
@@ -388,20 +394,58 @@ export function FlowDiagram() {
     }
   }, [state.pollCount, state.status]);
 
-  // Two simulated peers polling on their own cadence, so the shared-cache story
-  // is visible even when the real tab is idle/slow.
+  // Nine simulated peers (clients 1..9) with their own mode state machines. A
+  // single ticking loop advances every peer: when its mode timer expires it may
+  // switch between active / idle / hidden; when its poll timer expires (and it
+  // isn't hidden) it fires a cache hit.
   useEffect(() => {
-    const timers = [
-      setInterval(
-        () => emitCacheHit.current("peer1", "peer1-cdn"),
-        PEER_BASE_MS[0],
-      ),
-      setInterval(
-        () => emitCacheHit.current("peer2", "peer2-cdn"),
-        PEER_BASE_MS[1],
-      ),
-    ];
-    return () => timers.forEach(clearInterval);
+    const peers = new Map<number, PeerState>();
+    const now0 = Date.now();
+    for (let i = 1; i < CLIENT_COUNT; i++) {
+      peers.set(i, {
+        mode: "active",
+        // Stagger initial polls so they don't fire in lockstep.
+        nextPollAt: now0 + rand(500, MODE_INTERVAL.active),
+        nextModeChangeAt: now0 + rand(6_000, 16_000),
+      });
+    }
+
+    const tick = () => {
+      const now = Date.now();
+      const modeChanges: [number, ClientMode][] = [];
+      for (const [index, p] of peers) {
+        if (now >= p.nextModeChangeAt) {
+          const m = nextMode();
+          if (m !== p.mode) {
+            p.mode = m;
+            modeChanges.push([index, m]);
+          }
+          p.nextModeChangeAt = now + rand(6_000, 18_000);
+          // Reschedule next poll to fit the new cadence.
+          if (m !== "hidden") {
+            p.nextPollAt = Math.min(
+              p.nextPollAt,
+              now + rand(300, MODE_INTERVAL[m]),
+            );
+          }
+        }
+        if (p.mode !== "hidden" && now >= p.nextPollAt) {
+          emitCacheHit.current(index);
+          const base = MODE_INTERVAL[p.mode];
+          p.nextPollAt = now + base + rand(-base * 0.15, base * 0.15);
+        }
+      }
+      if (modeChanges.length > 0) {
+        setClientModes((prev) => {
+          const next = new Map(prev);
+          for (const [i, m] of modeChanges) next.set(i, m);
+          return next;
+        });
+      }
+    };
+
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
   }, []);
 
   // Clean up pending lit-state timers on unmount.
@@ -425,7 +469,8 @@ export function FlowDiagram() {
           serves the cached page without running the ISR function. Only when the
           cache goes stale does the function run, call{" "}
           <code className="font-mono text-[0.85em]">back</code>, and reach the
-          provider, and that one result is shared by every client.
+          provider, and that one result is shared by every client. The peers
+          drift between active, idle, and hidden over time.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -444,6 +489,7 @@ export function FlowDiagram() {
                 key={c.id}
                 d={c.d}
                 flow={activeConns.get(c.id) ?? null}
+                isClient={CLIENT_CONN_IDS.includes(c.id)}
               />
             ))}
 
@@ -464,11 +510,25 @@ export function FlowDiagram() {
               })}
             </AnimatePresence>
 
-            {NODES.map((n) => (
-              <DiagramNode
+            {CLIENTS.map((c) => (
+              <ClientChip
+                key={c.index}
+                pos={c}
+                primary={c.index === 0}
+                mode={
+                  c.index === 0
+                    ? "active"
+                    : (clientModes.get(c.index) ?? "active")
+                }
+                lit={litClients.has(c.index)}
+              />
+            ))}
+
+            {SERVICES.map((n) => (
+              <ServiceNodeView
                 key={n.id}
                 node={n}
-                flow={activeNodes.get(n.id) ?? null}
+                flow={activeServices.get(n.id) ?? null}
               />
             ))}
           </svg>
@@ -484,8 +544,7 @@ function Boundaries() {
   return (
     <g>
       {BOUNDARIES.map((b) => {
-        const fontSize = b.inner ? 8.5 : 10;
-        const labelW = b.label.length * (b.inner ? 5.2 : 7.2) + 16;
+        const labelW = b.label.length * 7.2 + 16;
         return (
           <g key={b.label}>
             <rect
@@ -493,33 +552,28 @@ function Boundaries() {
               y={b.y}
               width={b.w}
               height={b.h}
-              rx={b.inner ? 10 : 14}
-              className={cn(
-                "stroke-border",
-                b.inner ? "fill-transparent" : "fill-foreground/[0.015]",
-              )}
+              rx={14}
+              className="fill-foreground/[0.015] stroke-border"
               strokeWidth={1}
-              strokeDasharray={b.inner ? "3 4" : "5 5"}
-              strokeOpacity={b.inner ? 0.6 : 1}
+              strokeDasharray="5 5"
             />
             <rect
               x={b.x + 12}
               y={b.y - 10}
               width={labelW}
-              height={b.inner ? 17 : 20}
+              height={20}
               rx={5}
               className="fill-background stroke-border"
               strokeWidth={1}
-              strokeOpacity={b.inner ? 0.6 : 1}
             />
             <text
               x={b.x + 12 + labelW / 2}
-              y={b.y + (b.inner ? 2 : 3)}
+              y={b.y + 3}
               textAnchor="middle"
               className="fill-muted-foreground"
-              fontSize={fontSize}
+              fontSize={10}
               fontFamily="var(--font-geist-mono), monospace"
-              letterSpacing={b.inner ? "0.04em" : "0.12em"}
+              letterSpacing="0.12em"
             >
               {b.label}
             </text>
@@ -530,7 +584,15 @@ function Boundaries() {
   );
 }
 
-function ConnectionLine({ d, flow }: { d: string; flow: Flow | null }) {
+function ConnectionLine({
+  d,
+  flow,
+  isClient,
+}: {
+  d: string;
+  flow: Flow | null;
+  isClient: boolean;
+}) {
   const active = flow !== null;
   return (
     <motion.path
@@ -542,7 +604,10 @@ function ConnectionLine({ d, flow }: { d: string; flow: Flow | null }) {
         flow === "poll" && "stroke-[var(--flow-cdn)]",
         flow === "revalidate" && "stroke-[var(--flow-api)]",
       )}
-      animate={{ strokeWidth: active ? 2 : 1.25, opacity: active ? 1 : 0.45 }}
+      animate={{
+        strokeWidth: active ? 2 : 1,
+        opacity: active ? 1 : isClient ? 0.28 : 0.45,
+      }}
       transition={{ duration: 0.25 }}
       strokeDasharray="2 7"
     />
@@ -564,7 +629,7 @@ function Particle({
 }) {
   return (
     <motion.circle
-      r={4.5}
+      r={4}
       style={{
         offsetPath: `path('${d}')`,
         fill: color,
@@ -581,7 +646,96 @@ function Particle({
   );
 }
 
-function DiagramNode({ node, flow }: { node: NodeDef; flow: Flow | null }) {
+const MODE_META: Record<ClientMode, { dot: string; label: string }> = {
+  active: { dot: "var(--flow-peer)", label: "polling" },
+  idle: { dot: "var(--flow-back)", label: "idle" },
+  hidden: { dot: "var(--flow-idle)", label: "hidden" },
+};
+
+function ClientChip({
+  pos,
+  primary,
+  mode,
+  lit,
+}: {
+  pos: ClientPos;
+  primary: boolean;
+  mode: ClientMode;
+  lit: boolean;
+}) {
+  const hidden = mode === "hidden";
+  const accent = primary ? "var(--flow-browser)" : "var(--flow-peer)";
+  const stroke = lit
+    ? primary
+      ? "var(--flow-browser)"
+      : "var(--flow-cdn)"
+    : primary
+      ? "var(--flow-browser)"
+      : "var(--flow-idle)";
+  return (
+    <g>
+      <motion.rect
+        x={pos.x}
+        y={pos.y}
+        width={CLIENT_W}
+        height={CLIENT_H}
+        rx={8}
+        className="fill-foreground/[0.025]"
+        animate={{
+          stroke,
+          strokeWidth: lit ? 1.6 : primary ? 1.4 : 1,
+          opacity: hidden ? 0.4 : 1,
+          filter: lit
+            ? `drop-shadow(0 0 7px ${primary ? "var(--flow-browser)" : "var(--flow-cdn)"})`
+            : "drop-shadow(0 0 0px transparent)",
+        }}
+        strokeDasharray={hidden ? "3 3" : undefined}
+        transition={{ duration: 0.2 }}
+      />
+      <foreignObject x={pos.x} y={pos.y} width={CLIENT_W} height={CLIENT_H}>
+        <div className="flex h-full items-center gap-1.5 px-2">
+          <MonitorSmartphone
+            className="size-3.5 shrink-0"
+            style={{
+              color: hidden
+                ? "var(--flow-icon-idle)"
+                : primary
+                  ? accent
+                  : "var(--flow-icon-idle)",
+            }}
+          />
+          <div className="flex min-w-0 flex-col leading-none">
+            <span
+              className="truncate font-semibold text-[10px]"
+              style={{
+                color: primary
+                  ? "var(--flow-label-active)"
+                  : "var(--flow-label)",
+              }}
+            >
+              {primary ? "You" : `Client ${pos.index}`}
+            </span>
+            <span className="flex items-center gap-1 font-mono text-[8px] text-muted-foreground">
+              <span
+                className="inline-block size-1 rounded-full"
+                style={{ background: primary ? accent : MODE_META[mode].dot }}
+              />
+              {primary ? "this tab" : MODE_META[mode].label}
+            </span>
+          </div>
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
+function ServiceNodeView({
+  node,
+  flow,
+}: {
+  node: ServiceNode;
+  flow: Flow | null;
+}) {
   const Icon = node.icon;
   const active = flow !== null;
   return (
@@ -596,12 +750,8 @@ function DiagramNode({ node, flow }: { node: NodeDef; flow: Flow | null }) {
           active ? "fill-foreground/[0.04]" : "fill-foreground/[0.02]",
         )}
         animate={{
-          stroke: active
-            ? node.color
-            : node.primary
-              ? "var(--flow-browser)"
-              : "var(--flow-idle)",
-          strokeWidth: active ? 1.8 : node.primary ? 1.4 : 1,
+          stroke: active ? node.color : "var(--flow-idle)",
+          strokeWidth: active ? 1.8 : 1,
           filter: active
             ? `drop-shadow(0 0 10px ${node.color})`
             : "drop-shadow(0 0 0px transparent)",
@@ -630,22 +780,6 @@ function DiagramNode({ node, flow }: { node: NodeDef; flow: Flow | null }) {
             transformOrigin: `${node.x + node.w / 2}px ${node.y + node.h / 2}px`,
           }}
         />
-      )}
-
-      {/* "You" marker on the primary client. */}
-      {node.primary && (
-        <foreignObject
-          x={node.x + node.w - 44}
-          y={node.y - 9}
-          width={44}
-          height={18}
-        >
-          <div className="flex justify-end">
-            <span className="rounded-full bg-[var(--flow-browser)] px-1.5 py-0.5 font-mono font-semibold text-[9px] text-white uppercase leading-none tracking-wider">
-              You
-            </span>
-          </div>
-        </foreignObject>
       )}
 
       <foreignObject x={node.x} y={node.y + 10} width={node.w} height={node.h}>
@@ -681,6 +815,10 @@ function Legend() {
       <LegendItem
         className="bg-[var(--flow-api)]"
         label="Revalidation (ISR function runs, reaches provider)"
+      />
+      <LegendItem
+        className="bg-[var(--flow-back)]"
+        label="Peer idle / hidden"
       />
     </div>
   );
