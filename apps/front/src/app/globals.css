@@ -226,11 +226,30 @@
 :root {
   --chart-flash: oklch(0.62 0.13 155);
   --chart-flash-fg: oklch(0.32 0.07 155);
+
+  /* Flow diagram palette (one hue per node). */
+  --flow-browser: oklch(0.62 0.19 264); /* indigo */
+  --flow-edge: oklch(0.6 0.15 155); /* emerald */
+  --flow-back: oklch(0.7 0.16 70); /* amber */
+  --flow-api: oklch(0.62 0.21 16); /* red */
+  --flow-idle: oklch(0.85 0 0 / 40%);
+  --flow-icon-idle: oklch(0.55 0 0);
+  --flow-label: oklch(0.4 0 0);
+  --flow-label-active: oklch(0.2 0 0);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --chart-flash: oklch(0.72 0.15 155);
     --chart-flash-fg: oklch(0.96 0.02 155);
+
+    --flow-browser: oklch(0.7 0.16 264);
+    --flow-edge: oklch(0.72 0.15 155);
+    --flow-back: oklch(0.78 0.15 70);
+    --flow-api: oklch(0.7 0.19 16);
+    --flow-idle: oklch(1 0 0 / 15%);
+    --flow-icon-idle: oklch(0.7 0 0);
+    --flow-label: oklch(0.75 0 0);
+    --flow-label-active: oklch(0.98 0 0);
   }
 }
 
