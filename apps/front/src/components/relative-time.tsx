@@ -7,7 +7,7 @@
 // Client-only because relative time depends on the viewer's clock; the server
 // renders the ISO string and the client hydrates the relative label.
 
-import { useEffect, useState } from "react";
+import { useNow } from "@/components/clock-provider";
 import {
   Tooltip,
   TooltipContent,
@@ -40,12 +40,7 @@ export function RelativeTime({
   className?: string;
 }) {
   const target = new Date(iso).getTime();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow();
 
   return (
     <Tooltip>

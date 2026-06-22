@@ -443,8 +443,28 @@ export function FlowDiagram() {
       }
     };
 
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id === null) id = setInterval(tick, 250);
+    };
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    // Don't simulate peers (or spawn particles) while the tab is hidden — the
+    // animations aren't visible and the work just throttles/queues uselessly.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") stop();
+      else start();
+    };
+    if (document.visibilityState !== "hidden") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   // Clean up pending lit-state timers on unmount.

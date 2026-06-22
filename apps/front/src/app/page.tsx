@@ -13,6 +13,7 @@
 //     components stay visible while reading.
 
 import { Architecture } from "@/components/architecture";
+import { ClockProvider } from "@/components/clock-provider";
 import { FlowDiagram } from "@/components/flow-diagram";
 import { LiveGameCard } from "@/components/live-game-card";
 import { PollMonitorProvider } from "@/components/poll-monitor";
@@ -72,48 +73,50 @@ export default async function Page() {
       {/* PollMonitorProvider scopes the whole demo: the poller publishes events
           and both the visualiser and the bottom flow diagram read them. */}
       <PollMonitorProvider>
-        <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-12 sm:py-16">
-          <header className="flex max-w-2xl flex-col gap-3">
-            <Badge
-              variant="outline"
-              className="w-fit font-mono text-[11px] tracking-wider"
-            >
-              LIVE SCORES · POC
-            </Badge>
-            <h1 className="text-balance font-semibold text-3xl tracking-tight sm:text-4xl">
-              Efficient near-realtime scores.
-            </h1>
-            <p className="text-pretty text-muted-foreground leading-relaxed">
-              One CDN-cached page, refreshed on the client with adaptive
-              polling. No WebSockets, no public JSON endpoint, and the
-              third-party API is hit at most once per revalidation window per
-              region.
-            </p>
-          </header>
+        <ClockProvider>
+          <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-12 sm:py-16">
+            <header className="flex max-w-2xl flex-col gap-3">
+              <Badge
+                variant="outline"
+                className="w-fit font-mono text-[11px] tracking-wider"
+              >
+                LIVE SCORES · POC
+              </Badge>
+              <h1 className="text-balance font-semibold text-3xl tracking-tight sm:text-4xl">
+                Efficient near-realtime scores.
+              </h1>
+              <p className="text-pretty text-muted-foreground leading-relaxed">
+                One CDN-cached page, refreshed on the client with adaptive
+                polling. No WebSockets, no public JSON endpoint, and the
+                third-party API is hit at most once per revalidation window per
+                region.
+              </p>
+            </header>
 
-          <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-12">
-            {/* Live demo: appears first on mobile; sticky left column on desktop. */}
-            <div className="lg:sticky lg:top-12">{demo}</div>
+            <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start lg:gap-12">
+              {/* Live demo: appears first on mobile; sticky left column on desktop. */}
+              <div className="lg:sticky lg:top-12">{demo}</div>
 
-            {/* Explainer: the scrolling reading column on desktop. */}
-            <Architecture />
-          </div>
+              {/* Explainer: the scrolling reading column on desktop. */}
+              <Architecture />
+            </div>
 
-          {/* Full-width live data-flow diagram at the very bottom. */}
-          <FlowDiagram />
+            {/* Full-width live data-flow diagram at the very bottom. */}
+            <FlowDiagram />
 
-          <footer className="flex items-center justify-between border-t pt-6 text-muted-foreground text-xs">
-            <span>Live Scores POC</span>
-            <a
-              href={REPO_URL}
-              className="hover:text-foreground"
-              target="_blank"
-              rel="noreferrer"
-            >
-              aldosch/scores-poc
-            </a>
-          </footer>
-        </main>
+            <footer className="flex items-center justify-between border-t pt-6 text-muted-foreground text-xs">
+              <span>Live Scores POC</span>
+              <a
+                href={REPO_URL}
+                className="hover:text-foreground"
+                target="_blank"
+                rel="noreferrer"
+              >
+                aldosch/scores-poc
+              </a>
+            </footer>
+          </main>
+        </ClockProvider>
       </PollMonitorProvider>
     </div>
   );

@@ -246,18 +246,17 @@ function Countdown({
   intervalMs: number;
   paused: boolean;
 }) {
+  // Tick once per second rather than every animation frame: the visible
+  // countdown label only changes at whole-second boundaries, and the ring
+  // fill is animated by a CSS transition (see below), so a 60fps rAF loop
+  // produced ~59 wasted renders per second.
   const [now, setNow] = useState(() => Date.now());
   const flashRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (paused) return;
-    let raf = 0;
-    const tick = () => {
-      setNow(Date.now());
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
   }, [paused]);
 
   const remainingMs =
@@ -299,7 +298,7 @@ function Countdown({
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             className={cn(
-              "transition-[stroke-dashoffset] duration-100 ease-linear",
+              "transition-[stroke-dashoffset] duration-300 ease-linear",
               paused ? "stroke-muted-foreground/40" : "stroke-emerald-500",
             )}
           />
